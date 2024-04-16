@@ -27,16 +27,15 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-const getTeams = (team_name)=>{
-  pool.query("SELECT * FROM PLAYERS JOIN teams ON PLAYERS.team_id = TEAMS.team_id WHERE TEAMS.team_name = ?",
-  [team_name], (err,results, fields)=>{
-    if(err){
-      console.log(err);
-      return;
-    }
-    console.log(results);
-    return results;
+const getTeams = async (team_name)=>{
+  const query = `SELECT * FROM PLAYERS JOIN teams ON PLAYERS.team_id = TEAMS.team_id WHERE TEAMS.team_name = "${team_name}";`
+  const team = await new Promise((resolve,reject)=>{
+    pool.query(query,(err,res)=>{
+      if(err) reject(err);
+      else resolve(res);
+    })
   });
+  return team;
 }
 
 app.post('/api/admin/signup',(req,res)=>{
@@ -120,7 +119,7 @@ app.get('/api/matches', (req, res) => {
 app.get('/api/matches/:id',(req, res) => {
     const matchId = req.params.id;
     pool.query('SELECT * FROM MATCHES WHERE match_id = ?', 
-    [matchId], (error, results, fields) => {
+    [matchId], async (error, results, fields) => {
       if (error) {
         console.error('Error retrieving match schedule:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -131,6 +130,14 @@ app.get('/api/matches/:id',(req, res) => {
       results=results[0];
       team1=results.team1;
       team2=results.team2;
+      const squad1 = await getTeams(team1);
+      const squad2 = await getTeams(team2);
+      results['squad1']=squad1;
+      results['squad2']=squad2;
+      const today = new Date();
+      const match_date = results.date;
+      if(match_date>today) results['status']="Upcoming";
+      else results["status"] = "Completed";
       res.status(200).json(results);
     });
 });
