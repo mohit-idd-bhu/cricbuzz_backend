@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
+const jwt = require('jsonwebtoken');
 const PORT = process.env.port||3000;
 const secret_key = 'my-secret-key';
 app.use(bodyParser.json());
@@ -13,6 +14,18 @@ const pool = mysql.createPool({
     password: 'mohitsrt',
     database: 'cricbuzz_app'
 });
+
+function verifyToken(req, res, next) {
+  const token = req.header('Authorization');
+  if (!token) return res.status(401).json({ error: 'Access denied' });
+  try {
+      const decoded = jwt.verify(token, 'my-secret-key');
+      req.userId = decoded.userId;
+      next();
+  } catch (error) {
+      res.status(401).json({ error: 'Invalid token' });
+  }
+};
 
 const getTeams = (team_name)=>{
   pool.query("SELECT * FROM PLAYERS JOIN teams ON PLAYERS.team_id = TEAMS.team_id WHERE TEAMS.team_name = ?",
@@ -62,11 +75,19 @@ app.post('/api/admin/login', (req, res) => {
       if (results.length === 0) {
         return res.status(401).json({ error: 'Invalid username or password' });
       }
-      res.status(200).json({ status: 'Login successful', userID: results[0].id });
+      const user = results[0];
+      const token = jwt.sign({ userId: user.id }, secret_key, {
+        expiresIn: '1h',
+        });
+      res.status(200).json({ 
+        status: 'Login successful', 
+        userID: user.id,
+        access_token: token
+      });
     });
 });
 
-app.post('/api/matches', (req, res) => {
+app.post('/api/matches',verifyToken, (req, res) => {
 
     const { team1, team2, date, venue } = req.body;
 
@@ -110,13 +131,11 @@ app.get('/api/matches/:id',(req, res) => {
       results=results[0];
       team1=results.team1;
       team2=results.team2;
-      const arr= getTeams("India");
-      console.log(arr);
       res.status(200).json(results);
     });
 });
 
-app.post('/api/teams/:team_id/squad', (req, res) => {
+app.post('/api/teams/:team_id/squad', verifyToken,(req, res) => {
 
   const { team_id } = req.params;
   const {name,role} = req.body;
