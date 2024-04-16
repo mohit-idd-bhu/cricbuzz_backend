@@ -15,7 +15,7 @@ const pool = mysql.createPool({
     database: 'cricbuzz_app'
 });
 
-function verifyToken(req, res, next) {
+const verifyToken = (req, res, next) => {
   const token = req.header('Authorization');
   if (!token) return res.status(401).json({ error: 'Access denied' });
   try {
